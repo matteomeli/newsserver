@@ -127,16 +127,16 @@ int initReaderServant() {
 }
 
 int runServer(server_t *server) {
-	pthread_t provider_accepter, reader_accepter;//, news_dispatcher;
+	pthread_t provider_accepter, reader_accepter, news_dispatcher;
 	void *status[3];
 	
 	pthread_create(&provider_accepter, NULL, &acceptProviders, server);
 	pthread_create(&reader_accepter, NULL, &acceptReaders, server);
-	//pthread_create(&news_dispatcher, NULL, &dispatch, server->dispatcher);
+	pthread_create(&news_dispatcher, NULL, &serveReaders, server);
 	
 	pthread_join(provider_accepter, status[0]);
 	pthread_join(reader_accepter, status[1]);
-	//pthread_join(reader_accepter, status[2]);
+	pthread_join(reader_accepter, status[2]);
 	
 	int i;
 	for (i=0; i<3; i++) {
@@ -152,7 +152,7 @@ void* acceptProviders(void *args) {
 	int processID = (int)getpid();
 	int error = 0;
 	
-	// Ottengo un riferimento all'accepter
+	// Ottengo un riferimento al server
 	server_t* server = (server_t *)args;
 	
 	// Ciclo infinito
@@ -172,7 +172,6 @@ void* acceptProviders(void *args) {
 		printf("server %d (thread %lu): Connessione effettuata!\n", 
 						processID, threadID);
 		
-		// TODO - Usa un altro thread per gestire la connessione con un nuovo client
 		// Preparati a ricevere l'id del news provider
 		int len = 0;
 		char incoming[SIZE_BUFFER];
@@ -202,10 +201,11 @@ void* acceptProviders(void *args) {
 				error = 1;
 				break;
 			}			
-			printf("server %d (thread %lu): ID già presente, connessione rifiutata!\n", 
+			printf("server %d (thread %lu): ID già presente, registrazione rifiutata!\n", 
 							processID, threadID, incoming);
 			close(sockmsg);
 		} else {
+			// TODO - Generate serial unique IDs
 			int id = 1;
 			sprintf(response, "%d", id);
 			if (sendString(sockmsg, response)<0) {
@@ -238,13 +238,60 @@ void* acceptReaders(void *args) {
 	int processID = (int)getpid();
 	int error = 0;
 	
-	// Ottengo un riferimento all'accepter
+	// Ottengo un riferimento al server
 	server_t* server = (server_t *)args;
 	
 	while (1) {
-		printf("server %d (thread %lu): Zzzzzzzzzz...\n", processID, threadID);
-		sleep(20);
+		// Aspetta una connessione
+		int sockmsg;
+		printf("server %d (thread %lu): Attendo connessione...\n", 
+						processID, threadID);
+		if ((sockmsg = accept(server->socket_readers, NULL, 0))<0) {
+			printf("server %d (thread %lu): Errore (%s) nella accept().\n", 
+							processID, threadID, strerror(errno));
+			error = 1;
+			break;
+		}
+		
+		// Connessione avvenuta con successo
+		printf("server %d (thread %lu): Connessione effettuata!\n", 
+						processID, threadID);
+						
+		// Preparati a ricevere l'id del news reader
+		int len = 0;
+		char incoming[SIZE_BUFFER];
+		char response[SIZE_BUFFER];
+		
+		// 1) Ricevi l'id
+		len = receiveString(sockmsg, incoming, sizeof(incoming));
+		if (len<=0) {
+			error = 1;
+			break;
+		}
+		printf("server %d (thread %lu): Registro nuovo reader (%s)...\n", 
+						processID, threadID, incoming);
+
+		// TODO - Generate serial unique IDs		
+		int id = 1;			
+		reader_id_t *reader = makeReaderID(id, incoming, sockmsg);
+		addElement(server->readers, reader);
+		
+		printf("server %d (thread %lu): readers -> ", processID, threadID);
+		showConnectedReaders(server->readers);
+
+		sprintf(response, "%d", id);
+		if (sendString(sockmsg, response)<0) {
+			printf("server %d (thread %lu): Errore (%s) durante la write().\n", 
+							processID, threadID, strerror(errno));
+			error = 1;
+			break;
+		}
 	}
+	
+	if (error)
+		pthread_exit(FAILURE);
+	else
+		pthread_exit(SUCCESS);
 }
 
 int isRegistered(list_t *providers, char *new_provider_id) {
@@ -381,7 +428,49 @@ void* serveProvider(void *args) {
 }
 
 void* serveReaders(void *args) {
-	// TODO
+	long threadID = (long)pthread_self();
+	int processID = (int)getpid();
+
+	char response[SIZE_BUFFER];
+	int len = 0;
+	int ack = 0;
+	int error = 0;
+		
+	// Ottengo un riferiemnto al providerda servire
+	server_t *server = (server_t *)args;
+	
+	while(1) {
+		printf("server %d (thread %lu): Servo i reader (zzzzz)...\n", 
+						processID, threadID);
+		//sleep(10);
+		
+		// Get a news
+		news_t *news = (news_t *)malloc(sizeof(news_t));
+		int *result = (int *)getBloccanteB(server->news, (void *)&news);
+		while (result==WAIT_MSG) {
+			result = (int *)getBloccanteB(server->news, (void *)&news);
+		}			
+		
+		// Send the news
+		// TODO - Check concurrent access
+		iterator_t *i = createIterator(server->readers);
+		while (hasNext(i) ) {
+			reader_id_t *reader = (reader_id_t *)next(i);
+			if (reader->active) {
+				if (!strcmp(reader->topic, news->topic)) {
+					printf("server %d (thread %lu): Mando la notizia al reader (%d).\n", 
+									processID, threadID, reader->socket);
+					if (sendString(reader->socket, news->message)<0) {
+						error = 1;
+						break;
+					}
+				}
+			}
+		}
+		freeIterator(i);
+		
+		sleep(5);
+	}
 }
 
 void showConnectedReaders(list_t *readers) {
@@ -389,7 +478,7 @@ void showConnectedReaders(list_t *readers) {
 	printf("{ ");
 	while(hasNext(i)) {
 		reader_id_t *reader_id = (reader_id_t *)next(i);
-		printf("%s ", reader_id->id);
+		printf("%d ", reader_id->socket);
 	}
 	printf("}\n");
 	freeIterator(i);	

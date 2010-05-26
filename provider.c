@@ -8,15 +8,14 @@
 #include "provider.h"
 
 int main (int argc, const char *argv[]) {
-	// TODO - Controlla input da linea di comando
 	provider_t* provider = initProvider(argc, argv);
 	if (!provider)
 		exit(EXIT_FAILURE);
 	
-	// Avvia il server	
+	// Avvia il provider	
 	int result = runProvider(provider);
 	
-	// Dealloca il server
+	// Dealloca il provider
 	destroyProvider(provider);
 	
 	(result<0)?exit(EXIT_FAILURE):exit(EXIT_SUCCESS);
@@ -102,7 +101,7 @@ int advertiseProvider(provider_t *provider) {
 		return 0;
 	} else if (atoi(incoming)>0) {
 		provider->id = atoi(incoming);
-		printf("client: Connessione riuscita! (%d)\n", provider->id);
+		printf("client: Registrazione riuscita! (%d)\n", provider->id);
 	} else {
 		printf("client: Errore nella comunicazione.\n");
 		return 0;
@@ -227,5 +226,7 @@ int runProvider(provider_t *provider) {
 }
 
 void destroyProvider(provider_t *provider) {
+	free(provider->name);
+	free(provider->topic);
 	free(provider);
 }

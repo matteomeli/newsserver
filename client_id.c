@@ -19,10 +19,13 @@ provider_id_t* makeProviderID(buffer_t *buffer, pthread_t worker, char *id, int 
 	return provider_id;
 }
 
-reader_id_t* makeReaderID(char *id, int socket) {
+reader_id_t* makeReaderID(int id, char *topic, int socket) {
 	reader_id_t *reader_id = (reader_id_t *)malloc(sizeof(reader_id_t));
-	reader_id->id = (char *)malloc(strlen(id)+1);
-	strcpy(reader_id->id, id);
+	//reader_id->id = (char *)malloc(strlen(id)+1);
+	//strcpy(reader_id->id, id);
+	reader_id->id = id;
+	reader_id->topic = (char *)malloc(strlen(topic)+1);
+	strcpy(reader_id->topic, topic);
 	reader_id->socket = socket;
 	reader_id->active = 1;
 	

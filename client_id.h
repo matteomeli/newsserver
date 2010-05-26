@@ -23,13 +23,14 @@ typedef struct provider_id_t {
 } provider_id_t;
 
 typedef struct reader_id_t {
-	char *id;
+	int id;
+	char *topic;
 	int socket;
 	int active;
 } reader_id_t;
 
 provider_id_t* makeProviderID(buffer_t *buffer, pthread_t worker, char *id, int socket);
 
-reader_id_t* makeReaderID(char *id, int socket);
+reader_id_t* makeReaderID(int id, char *topic, int socket);
 
 #endif /* end of include guard: CLIENT_ID_H */

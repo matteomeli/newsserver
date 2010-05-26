@@ -34,7 +34,8 @@
 
 #define NAME_KO						-1
 #define WAIT							-2
-#define FULL							-1
+#define FULL							-3
+#define QUIT							-4
 
 typedef struct server_t {
 	buffer_t *news;

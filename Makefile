@@ -4,7 +4,7 @@ provider:
 	gcc pc.c provider.c -o provider 
 	
 reader:
-	gcc pc.c reader.c -o reader
+	gcc list.c pc.c reader.c -o reader
 	
 server:
 	gcc buffer.c list.c pc.c client_id.c news.c server.c -o server
