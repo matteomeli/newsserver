@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <semaphore.h>
 
 #include "buffer.h"
 #include "list.h"
@@ -41,8 +42,10 @@ typedef struct server_t {
 	buffer_t *news;
 	list_t *readers;
 	list_t *providers;
-	int socket_providers;
 	int socket_readers;
+	int socket_providers;
+	//sem_t *sem_readers;
+	//sem_t *sem_providers;
 } server_t;
 
 server_t* initServer(int argc, const char *argv[]);

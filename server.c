@@ -37,6 +37,15 @@ server_t* initServer(int argc, const char *argv[]) {
 	server->news = initVuoto(SIZE_NEWS);
 	server->readers = allocList();
 	server->providers = allocList();
+	// TODO - Fix semaphore problem
+	//server->sem_readers = (sem_t *)malloc(sizeof(sem_t));
+	//server->sem_providers = (sem_t *)malloc(sizeof(sem_t));
+	// sem_init not implemented on Mac OS X, try with named semaphores (sem_open)
+	//int r = sem_init(server->sem_readers, 0, 1);
+	//server->sem_readers = sem_open("/sreaders", O_CREAT, 0666, 1);
+	//if (server->sem_readers==SEM_FAILED)
+	//	printf("server: Errore (%s) nella sem_open().\n", strerror(errno));
+	//sem_init(server->sem_providers, 0, 1);
 }
 
 int initProviderServant() {
@@ -192,7 +201,9 @@ void* acceptProviders(void *args) {
 						processID, threadID, incoming);
 		
 		// 1) Verifica presenza
-		int present = isRegistered(server->providers, incoming);		// TODO - Controlla presenza realmente
+		//sem_wait(server->sem_providers);
+			int present = isRegistered(server->providers, incoming);
+		//sem_post(server->sem_providers);
 		if (present) {
 			sprintf(response, "%d", NAME_KO);
 			if (sendString(sockmsg, response)<0) {
@@ -215,12 +226,15 @@ void* acceptProviders(void *args) {
 				break;
 			}
 			// Crea un nuovo provider ID
+			printf("server %d (thread %lu): ID accettato!\n", processID, threadID);
 			pthread_t worker;
 			provider_id_t *provider = makeProviderID(server->news, worker, incoming, sockmsg);
-			addElement(server->providers, provider);
-			printf("server %d (thread %lu): ID accettato!\n", processID, threadID);
-			printf("server %d (thread %lu): providers -> ", processID, threadID);
-			showConnectedProviders(server->providers);
+			
+			//sem_wait(server->sem_providers);
+				addElement(server->providers, provider);
+				printf("server %d (thread %lu): providers -> ", processID, threadID);
+				showConnectedProviders(server->providers);
+			//sem_post(server->sem_providers);
 			
 			// TODO - Start a new thread to server the provider
 			pthread_create(&worker, NULL, &serveProvider, provider);
@@ -274,10 +288,11 @@ void* acceptReaders(void *args) {
 		// TODO - Generate serial unique IDs		
 		int id = 1;			
 		reader_id_t *reader = makeReaderID(id, incoming, sockmsg);
-		addElement(server->readers, reader);
-		
-		printf("server %d (thread %lu): readers -> ", processID, threadID);
-		showConnectedReaders(server->readers);
+		//sem_wait(server->sem_readers);
+			addElement(server->readers, reader);
+			printf("server %d (thread %lu): readers -> ", processID, threadID);
+			showConnectedReaders(server->readers);
+		//sem_post(server->sem_readers);
 
 		sprintf(response, "%d", id);
 		if (sendString(sockmsg, response)<0) {
@@ -295,7 +310,6 @@ void* acceptReaders(void *args) {
 }
 
 int isRegistered(list_t *providers, char *new_provider_id) {
-	// TODO - Check concurrent access
 	iterator_t *i = createIterator(providers);
 	int found = 0;
 	
@@ -321,12 +335,6 @@ void* serveProvider(void *args) {
 		
 	// Ottengo un riferiemnto al providerda servire
 	provider_id_t *provider = (provider_id_t *)args;
-	
-	// while(1) {
-	// 	printf("server %d (thread %lu): Servo il provider \"%s\"...\n", 
-	// 					processID, threadID, provider->id);
-	// 	sleep(2);
-	// }
 	
 	printf("server %d (thread %lu): Servo il provider \"%s\"...\n", 
 					processID, threadID, provider->id);
@@ -440,9 +448,8 @@ void* serveReaders(void *args) {
 	server_t *server = (server_t *)args;
 	
 	while(1) {
-		printf("server %d (thread %lu): Servo i reader (zzzzz)...\n", 
+		printf("server %d (thread %lu): Servo i reader...\n", 
 						processID, threadID);
-		//sleep(10);
 		
 		// Get a news
 		news_t *news = (news_t *)malloc(sizeof(news_t));
@@ -450,9 +457,9 @@ void* serveReaders(void *args) {
 		while (result==WAIT_MSG) {
 			result = (int *)getBloccanteB(server->news, (void *)&news);
 		}			
-		
+
 		// Send the news
-		// TODO - Check concurrent access
+		//sem_wait(server->sem_readers);
 		iterator_t *i = createIterator(server->readers);
 		while (hasNext(i) ) {
 			reader_id_t *reader = (reader_id_t *)next(i);
@@ -468,9 +475,15 @@ void* serveReaders(void *args) {
 			}
 		}
 		freeIterator(i);
+		//sem_post(server->sem_readers);
 		
-		sleep(5);
+		sleep(1);
 	}
+	
+	if (error)
+		pthread_exit(FAILURE);
+	else
+		pthread_exit(SUCCESS);
 }
 
 void showConnectedReaders(list_t *readers) {
@@ -501,5 +514,7 @@ void destroyServer(server_t *server) {
 	destroyBuffer(server->news);
 	freeList(server->providers);
 	freeList(server->providers);
+	//sem_unlink("/sreaders");
+	//sem_destroy(server->sem_providers);
 	free(server);
 }
