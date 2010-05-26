@@ -7,8 +7,7 @@
 
 #include "provider.h"
 
-int main (int argc, const char *argv[])
-{
+int main (int argc, const char *argv[]) {
 	// TODO - Controlla input da linea di comando
 	provider_t* provider = initProvider(argc, argv);
 	if (!provider)
@@ -87,15 +86,15 @@ int advertiseProvider(provider_t *provider) {
 	char incoming[SIZE_BUFFER];
 	
 	// 1a) Invia ID e aspetta ACK
-	printf("client: Invio ID (%s)\n", provider->name);
+	printf("client: Invio ID (%s)...\n", provider->name);
 	if (sendString(provider->socket, provider->name)<0) {
-		printf("client: Errore (%s) durante la write\n", strerror(errno));
+		printf("client: Errore (%s) durante la write().\n", strerror(errno));
 		return 0;	
 	}
 	
 	// 1b) Ricevi ACK (connectionID)
 	if (receiveString(provider->socket, incoming, sizeof(incoming))<=0) {
-		printf("client: Errore %s durante la read\n", strerror(errno));
+		printf("client: Errore (%s) durante la read().\n", strerror(errno));
 		return 0;
 	}
 	if (atoi(incoming)==NAME_KO) {
@@ -105,7 +104,7 @@ int advertiseProvider(provider_t *provider) {
 		provider->id = atoi(incoming);
 		printf("client: Connessione riuscita! (%d)\n", provider->id);
 	} else {
-		printf("client: Errore nella comunicazione\n");
+		printf("client: Errore nella comunicazione.\n");
 		return 0;
 	}
 	
@@ -113,10 +112,10 @@ int advertiseProvider(provider_t *provider) {
 }
 
 int sendNews(provider_t *provider) {
-	while (1) {
-		printf("client: Zzzzzzzzzz...\n");
-		sleep(10);
-	}
+	//while (1) {
+	//	printf("client: Zzzzzzzzzz...\n");
+	//	sleep(10);
+	//}
 	// Protocollo di interazione col server:
 	//	1) manda ID --> ricevi sonnection ID
 	//	2) manda topicID --> ricevi ACK
@@ -165,9 +164,9 @@ int sendNews(provider_t *provider) {
 			if (atoi(incoming)==toack) {
 				printf("client: Ricevuto ACK (%s).\n", incoming);
 				toack++;
-			} else if (atoi(incoming)==0) {
+			} else if (atoi(incoming)==WAIT) {
 				// Attendo ricezione ACK
-				while (atoi(incoming)==0) {
+				while (atoi(incoming)==WAIT) {
 					printf("client: Attendo risposta dal server...\n");
 					if (receiveString(provider->socket, incoming, sizeof(incoming))<=0){
 						printf("client: Errore (%s) durante la read().\n", strerror(errno));
@@ -175,7 +174,7 @@ int sendNews(provider_t *provider) {
 					}
 				}
 				if (atoi(incoming)==toack) {
-					printf("client: Ricevuto ACK (%s)\n", incoming);
+					printf("client: Ricevuto ACK (%s).\n", incoming);
 					toack++;
 				} else {
 					printf("client: Riprova più tardi...\n");
@@ -197,7 +196,7 @@ int sendNews(provider_t *provider) {
 				;
 			if (input=='N' || input=='n') {
 				printf("client: Chiudo la connessione.\n");
-				if (sendString(provider->socket, (char *)-4)<0) {
+				if (sendString(provider->socket, "QUIT")<0) {
 					printf("Errore (%s) durante la write().\n", strerror(errno));
 					return 0;
 				}
@@ -205,9 +204,9 @@ int sendNews(provider_t *provider) {
 			}
 			i += provider->msgs;
 		} else {
-			printf("client: notizie esaurite\n");
-			if (sendString(provider->socket, (char *)-4)<0) {
-				printf("client: errore (%s) durante la write\n", strerror(errno));
+			printf("client: Notizie esaurite, esco...\n");
+			if (sendString(provider->socket, "QUIT")<0) {
+				printf("client: Errore (%s) durante la write().\n", strerror(errno));
 				return 0;
 			}
 			break;
@@ -228,5 +227,5 @@ int runProvider(provider_t *provider) {
 }
 
 void destroyProvider(provider_t *provider) {
-	
+	free(provider);
 }

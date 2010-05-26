@@ -7,7 +7,7 @@ reader:
 	gcc pc.c reader.c -o reader
 	
 server:
-	gcc buffer.c list.c pc.c server.c -o server
+	gcc buffer.c list.c pc.c client_id.c news.c server.c -o server
 
 test: 
 	gcc buffer.c list.c fixtures_buffer.c \

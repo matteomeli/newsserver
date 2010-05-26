@@ -22,6 +22,7 @@
 #define NEWS_PUBLISH			8888
 #define SIZE_BUFFER				64
 #define NAME_KO						-1
+#define WAIT							-2
 
 typedef struct provider_t {
 	int 	id;

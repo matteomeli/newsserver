@@ -15,26 +15,28 @@
 #include <netinet/in.h>
 #include <errno.h>
 
-// #include "accepter.h"
-// #include "dispatcher.h"
 #include "buffer.h"
 #include "list.h"
+#include "client_id.h"
+#include "news.h"
 
 #define NEWS_ADDRESS			"127.0.0.1"
 #define NEWS_PUBLISH			8888
 #define NEWS_SUBSCRIBE		8889
 #define BACKLOG_SIZE			5
+#define MAX_TRIES					5
 
 #define SIZE_NEWS					16
 #define SIZE_BUFFER				64
 
-#define NAME_KO						-1
 #define SUCCESS						(void *)0
 #define FAILURE						(void *)-1
 
+#define NAME_KO						-1
+#define WAIT							-2
+#define FULL							-1
+
 typedef struct server_t {
-	// accepter_t *accepter;
-	// dispatcher_t *dispatcher;
 	buffer_t *news;
 	list_t *readers;
 	list_t *providers;
@@ -53,6 +55,8 @@ int initReaderServant();
 void* acceptProviders(void *args);
 
 void* acceptReaders(void *args);
+
+int isRegistered(list_t *providers, char *new_provider_id);
 
 // Thread function to serve one provider
 void* serveProvider(void *args);

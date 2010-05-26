@@ -193,7 +193,7 @@ void* acceptProviders(void *args) {
 						processID, threadID, incoming);
 		
 		// 1) Verifica presenza
-		int present = 0;		// TODO - Controlla presenza realmente
+		int present = isRegistered(server->providers, incoming);		// TODO - Controlla presenza realmente
 		if (present) {
 			sprintf(response, "%d", NAME_KO);
 			if (sendString(sockmsg, response)<0) {
@@ -214,12 +214,16 @@ void* acceptProviders(void *args) {
 				error = 1;
 				break;
 			}
-			addElement(server->providers, incoming);
+			// Crea un nuovo provider ID
+			pthread_t worker;
+			provider_id_t *provider = makeProviderID(server->news, worker, incoming, sockmsg);
+			addElement(server->providers, provider);
 			printf("server %d (thread %lu): ID accettato!\n", processID, threadID);
 			printf("server %d (thread %lu): providers -> ", processID, threadID);
 			showConnectedProviders(server->providers);
 			
 			// TODO - Start a new thread to server the provider
+			pthread_create(&worker, NULL, &serveProvider, provider);
 		}
 	}
 	
@@ -240,21 +244,140 @@ void* acceptReaders(void *args) {
 	while (1) {
 		printf("server %d (thread %lu): Zzzzzzzzzz...\n", processID, threadID);
 		sleep(20);
-	}	
+	}
 }
 
-void* serverProvider(void *args) {
+int isRegistered(list_t *providers, char *new_provider_id) {
+	// TODO - Check concurrent access
+	iterator_t *i = createIterator(providers);
+	int found = 0;
+	
+	while (hasNext(i) && !found) {
+		provider_id_t *provider_id = (provider_id_t *)next(i);
+		if (!strcmp(provider_id->id, new_provider_id))
+			found = 1;
+	}
+	
+	return found;
+}
+
+void* serveProvider(void *args) {
 	long threadID = (long)pthread_self();
 	int processID = (int)getpid();
-	int error = 0;
-	
-	// Ottengo un riferiemnto al providerda servire
 
+	char incoming[SIZE_BUFFER];
+	char response[SIZE_BUFFER];
+	char topic[SIZE_BUFFER];
+	int len = 0;
+	int ack = 0;
+	int error = 0;
+		
+	// Ottengo un riferiemnto al providerda servire
+	provider_id_t *provider = (provider_id_t *)args;
 	
-	while(1) {
-		printf("server %d (thread %lu): Servo un provider...\n", processID, threadID);
-		sleep(2);
+	// while(1) {
+	// 	printf("server %d (thread %lu): Servo il provider \"%s\"...\n", 
+	// 					processID, threadID, provider->id);
+	// 	sleep(2);
+	// }
+	
+	printf("server %d (thread %lu): Servo il provider \"%s\"...\n", 
+					processID, threadID, provider->id);
+
+	// Ricevi il topic delle news e manda un ACK
+	len = receiveString(provider->socket, incoming, sizeof(incoming));
+	if (len<=0)
+		error = 1;
+
+	if (!error) {
+		// Manda l'ack per il topic
+		strcpy(topic, incoming);
+		printf("server %d (thread %lu): Ricevuto topic (%s).\n", processID, threadID, incoming);
+		sprintf(response, "%d", ack++);
+		if (sendString(provider->socket, response)<0)
+			error = 1;
+		printf("server %d (thread %lu): Rispondo con ACK (%d).\n", processID, threadID, ack);
+		
+		// Servi il client fino alla disconnessione
+		while (1) {
+			// Leggi prossimo messaggio
+			len = receiveString(provider->socket, incoming, sizeof(incoming));
+			if (len<=0) {
+				printf("server %d (thread %lu): Client si è disconnesso.\n", processID, threadID);
+				break;
+			}
+
+			printf("server %d (thread %lu): Ricevuto messaggio (%s).\n", processID, threadID, incoming);
+			// Se il messaggio è QUIT abbatti la connessione
+			if (!strcmp(incoming,"QUIT"))
+				break;
+
+			// Accoda la notizia nel buffer
+			int *result;
+			int delay = 1;
+			int tries = 0;
+			
+			// Costruisci una struttura notizia
+			news_t *news = makeNews(topic, incoming, 1);
+			
+			result = (int *)putBloccante(provider->buffer, news);
+			while (result!=(int *)BUFFER_OK && tries<MAX_TRIES) {
+				// Mando al client un segnale di attesa
+				sprintf(response, "%d", WAIT);
+				if (sendString(provider->socket, response)<0) {
+					printf("server %d (thread %lu): Errore (%s) durante la write().\n", 
+									processID, threadID, strerror(errno));
+					error = 1;
+					break;
+				}
+
+				// Se l'inserimento non va a buon fine, aspetta un tempo delay e riprova
+				tries++;
+				printf("server %d (thread %lu): Buffer pieno, aspetto %ds...\n", 
+								processID, threadID, delay);
+				sleep(delay);
+				printf("server %d (thread %lu): Provo di nuovo (Tentativo: %d).\n", 
+								processID, threadID, tries);
+				result = (int *)putBloccante(provider->buffer, news);
+				delay *= 2;		// Aspetta 1s, poi 2s, poi 4s, poi 8s etc.
+			}
+
+			if (result==(int *)BUFFER_OK) {
+				// Manda un ACK
+				sprintf(response, "%d", ack);
+				if (sendString(provider->socket, response)<0) {
+					printf("server %d (thread %lu): Errore (%s) durante la write().\n", 
+									processID, threadID, strerror(errno));
+					error = 1;
+					break;
+				}
+				printf("server %d (thread %lu): Rispondo con ACK (%d).\n", 
+								processID, threadID, ack++);
+			} else {
+				// Manda un segnale di abbandono
+				sprintf(response, "%d", FULL);
+				if (sendString(provider->socket, response)<0) {
+					printf("server %d (thread %lu): Errore (%s) durante la write.\n", 
+									processID, threadID, strerror(errno));
+					error = 1;
+					break;
+				}
+				printf("server %d (thread %lu): Buffer occupato.\n", processID, threadID);
+				break;
+			}
+		}
 	}
+
+	close(provider->socket);
+	provider->active = 0;
+	// TODO - Remove provider from list
+	printf("server %d (thread %lu): Chiudo la connessione con \"%s\".\n", 
+					processID, threadID, provider->id);
+
+	if (error)
+		pthread_exit(FAILURE);
+	else
+		pthread_exit(SUCCESS);
 }
 
 void* serveReaders(void *args) {
@@ -265,8 +388,8 @@ void showConnectedReaders(list_t *readers) {
 	iterator_t *i = createIterator(readers);
 	printf("{ ");
 	while(hasNext(i)) {
-		char *current_id = (char *)next(i);
-		printf("%s ", current_id);
+		reader_id_t *reader_id = (reader_id_t *)next(i);
+		printf("%s ", reader_id->id);
 	}
 	printf("}\n");
 	freeIterator(i);	
@@ -276,8 +399,8 @@ void showConnectedProviders(list_t *providers) {
 	iterator_t *i = createIterator(providers);
 	printf("{ ");
 	while(hasNext(i)) {
-		char *current_id = (char *)next(i);
-		printf("%s ", current_id);
+		provider_id_t *provider_id = (provider_id_t *)next(i);
+		printf("%s ", provider_id->id);
 	}
 	printf("}\n");
 	freeIterator(i);
