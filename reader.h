@@ -15,6 +15,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <netdb.h>
+#include <pthread.h>
 
 #include "list.h"
 
@@ -23,11 +24,15 @@
 #define SIZE_BUFFER					64
 #define QUIT								-4
 
+#define SUCCESS						(void *)0
+#define FAILURE						(void *)-1
+
 typedef struct reader_t {
 	int id;
 	char *name;
 	char *topic;
 	int socket;
+	//int running;
 	list_t *received;
 } reader_t;
 
@@ -38,6 +43,8 @@ int connectToServer(reader_t *reader);
 int subscribeReader(reader_t *reader);
 
 int getNews(reader_t *reader);
+
+void* getInput(void *args);
 
 int runReader(reader_t *reader);
 

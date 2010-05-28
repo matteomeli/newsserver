@@ -44,8 +44,10 @@ typedef struct server_t {
 	list_t *providers;
 	int socket_readers;
 	int socket_providers;
-	//sem_t *sem_readers;
-	//sem_t *sem_providers;
+	sem_t *sem_readers;
+	sem_t *sem_providers;
+	//pthread_mutex_t *readers_mutex;
+	//pthread_mutex_t *providers_mutex;
 } server_t;
 
 server_t* initServer(int argc, const char *argv[]);
@@ -67,6 +69,10 @@ void* serveProvider(void *args);
 
 // Thread function to serve the readers
 void* serveReaders(void *args);
+
+void* cleanProviders(void *args);
+
+void* cleanReaders(void *args);
 
 void showConnectedReaders(list_t *readers);
 

@@ -4,10 +4,10 @@ provider:
 	gcc pc.c provider.c -o provider 
 	
 reader:
-	gcc list.c pc.c reader.c -o reader
+	gcc list.c pc.c reader.c -o reader -lpthread
 	
 server:
-	gcc buffer.c list.c pc.c client_id.c news.c server.c -o server
+	gcc buffer.c list.c pc.c client_id.c news.c server.c -o server -lpthread
 
 test: 
 	gcc buffer.c list.c fixtures_buffer.c \

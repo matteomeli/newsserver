@@ -8,16 +8,22 @@
 #ifndef NEWS_H
 #define NEWS_H
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 typedef struct news_t {
-	int id;
+	char *sender;
 	char *topic;
 	char *message;
+	int serialnumber;
 } news_t;
 
-news_t* makeNews(char *topic, char *message, int id);
+news_t* makeNews(char *sender, char *topic, char *message, int serialnumber);
+
+char* news2Message(news_t *news);
+
+void destroyNews(news_t *news);
 
 #endif /* end of include guard: NEWS_H */
 

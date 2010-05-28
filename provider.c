@@ -111,10 +111,6 @@ int advertiseProvider(provider_t *provider) {
 }
 
 int sendNews(provider_t *provider) {
-	//while (1) {
-	//	printf("client: Zzzzzzzzzz...\n");
-	//	sleep(10);
-	//}
 	// Protocollo di interazione col server:
 	//	1) manda ID --> ricevi sonnection ID
 	//	2) manda topicID --> ricevi ACK
@@ -126,7 +122,7 @@ int sendNews(provider_t *provider) {
 	int toack = 0;
 
 	// 2a) Manda il topic ID
-	printf("client: Invio al server il topicID=\"%s\"\n", provider->topic);
+	printf("client: Invio al server il topic (%s)\n", provider->topic);
 	if (sendString(provider->socket, provider->topic)<0) {
 		printf("client: Errore (%s) durante la write().\n", strerror(errno));
 		return 0;

@@ -34,6 +34,7 @@ reader_t* initReader(int argc, const char *argv[]) {
 	reader->received = allocList();
 	reader->id = 0;
 	reader->socket = 0;
+	//reader->running = 1;
 	
 	return reader;
 }
@@ -81,21 +82,38 @@ int connectToServer(reader_t *reader) {
 int subscribeReader(reader_t *reader) {
 	char incoming[SIZE_BUFFER];
 	
-	// 1a) Invia ID e aspetta ACK
-	printf("client: Invio al server il topic di interesse (%s).\n", reader->topic);
-	if (sendString(reader->socket, reader->topic)<0) {
+	// Invia ID e aspetta ACK
+	printf("client: Invio ID (%s).\n", reader->name);
+	if (sendString(reader->socket, reader->name)<0) {
 		printf("client: Errore (%s) durante la write().\n", strerror(errno));
 		return 0;	
 	}
 	
-	// 1b) Ricevi ACK (connectionID)
+	// Ricevi ACK (connectionID)
 	if (receiveString(reader->socket, incoming, sizeof(incoming))<=0) {
 		printf("client: Errore (%s) durante la read().\n", strerror(errno));
 		return 0;
 	}
 	if (atoi(incoming)>0) {
 		reader->id = atoi(incoming);
-		printf("client: Connessione riuscita! (%d)\n", reader->id);
+
+		// Invia Topic e aspetta ACK
+		printf("client: Invio al server il topic (%s)\n", reader->topic);
+		if (sendString(reader->socket, reader->topic)<0) {
+			printf("client: Errore (%s) durante la write().\n", strerror(errno));
+			return 0;
+		}
+		// Ricevi ACK (Se non ricevi un ACK c'è un errore, termina)
+		if (receiveString(reader->socket, incoming, sizeof(incoming))<=0) {
+			printf("client: Errore (%s) durante la read().\n", strerror(errno));
+			return 0;
+		}
+		if (atoi(incoming)==0) {
+			printf("client: Connessione riuscita! (%d)\n", reader->id);
+		} else {
+			printf("client: Errore nella comunicazione.\n");
+			return 0;
+		}
 	} else {
 		printf("client: Errore nella comunicazione.\n");
 		return 0;
@@ -109,7 +127,14 @@ int getNews(reader_t *reader) {
 	
 	// Protocollo di interazione col server:
 	//	1) ricevi notizie fino all'invio di un messagio di terminazione.
-	printf("client: Inizio ricezione notizie...\n");
+	printf("client: Inizio ricezione notizie... (Premi 'q' e invio per uscire)\n");
+	printf("client: Formato notizie -> [id:provider~message].\n");
+	
+	// Start a thread to get input commands
+	// pthread_t input_getter;
+	// void *status;
+	// pthread_create(&input_getter, NULL, &getInput, reader);
+	
 	while (1) {
 		// Ricevi prossima notizia
 		if (receiveString(reader->socket, incoming, sizeof(incoming))<=0){
@@ -127,10 +152,45 @@ int getNews(reader_t *reader) {
 		}
 	}
 	
+	//pthread_join(input_getter, status);
 	printf("client: esco...\n");
 	
-	return 1;	
+	//if (status != SUCCESS)
+	//	return 0;
+		
+	return 1;
 }
+
+// void* getInput(void *args) {
+// 	int error = 0;
+// 	
+// 	// Ottieni il riferimento al client reader
+// 	reader_t *reader = (reader_t *)args;
+// 	
+// 	char input;
+// 	while ((input = getchar()) == '\n')
+// 		;
+// 	
+// 	if (input!='q') {
+// 		printf("client: Input non valido. Premi 'q' e invio per chiudere.\n");
+// 		scanf("%s", input);
+// 	}
+// 	reader->running = 0;
+// 	
+// 	// Send a quit message
+// 	if (sendString(reader->socket, "QUIT")<0) {
+// 		printf("client: Errore (%s) durante la write().\n", strerror(errno));
+// 		error = 1;
+// 	}
+// 	printf("client: Chiudo la connessione.\n");
+// 	
+// 	destroyReader(reader);
+// 	
+// 	if (error)
+// 		exit(EXIT_FAILURE);
+// 	else
+// 		exit(EXIT_SUCCESS);
+// }
 
 int runReader(reader_t *reader) {
 	if (!connectToServer(reader))
