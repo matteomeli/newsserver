@@ -48,6 +48,16 @@ void removeElement(list_t *list, void *element) {
 	}
 }
 
+int count(list_t *list) {
+	list_t *curr = list;
+	int count = -1;			// Per escludere l'elemento dummy head
+	
+	for (; curr; curr=curr->next, count++)
+		;
+		
+	return count;
+}
+
 iterator_t* createIterator(list_t *list) {
 	iterator_t *it = (iterator_t *)malloc(sizeof(iterator_t));
 	if (!list->data)

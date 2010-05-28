@@ -30,7 +30,7 @@ void* putBloccante(buffer_t* buffer, void *msg) {
 				// Superato il tempo massimo ->
 				// rilascia il lock, annulla operazione e ritorna un codice d'errore
 				pthread_mutex_unlock(buffer->buffer_mutex);
-				return WAIT_MSG;
+				return BUFFER_WAIT;
 			}
 		}
 
@@ -66,7 +66,7 @@ void* getBloccante(buffer_t* buffer) {
 				// Superato il tempo massimo ->
 				// rilascia il lock, annulla operazione e ritorna un codice d'errore
 				pthread_mutex_unlock(buffer->buffer_mutex);
-				return WAIT_MSG;
+				return BUFFER_WAIT;
 			}
 		}
 		
@@ -102,7 +102,7 @@ void* getBloccanteB(buffer_t* buffer, void **output) {
 				// Superato il tempo massimo ->
 				// rilascia il lock, annulla operazione e ritorna un codice d'errore
 				pthread_mutex_unlock(buffer->buffer_mutex);
-				return WAIT_MSG;
+				return BUFFER_WAIT;
 			}
 		}
 		

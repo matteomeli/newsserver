@@ -38,6 +38,9 @@ void addElement(list_t *list, void *element);
 // Rimuove un elemento
 void removeElement(list_t *list, void *element);
 
+// Conta gli elementi nella lista
+int count(list_t *list);
+
 // Crea un iteratore sulla lista
 iterator_t* createIterator(list_t *list);
 

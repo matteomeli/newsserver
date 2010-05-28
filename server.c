@@ -432,6 +432,8 @@ void* serveProvider(void *args) {
 	printf("server %d (thread %lu): Servo il provider \"%s\"...\n",  
 					processID, threadID, provider->name);
 					
+	//printf("buffer N: %d\n", provider->buffer->N);
+					
 	// Servi il client fino alla disconnessione
 	while (1) {
 		// Leggi prossimo messaggio
@@ -458,6 +460,9 @@ void* serveProvider(void *args) {
 														incoming, ++serialnumber);
 
 		result = (int *)putBloccante(provider->buffer, news);
+		//printf("response: %d\n", result);
+		//printf("buffer K: %d\n", provider->buffer->K);
+		//printf("buffer N: %d\n", provider->buffer->N);
 		while (result!=(int *)BUFFER_OK && tries<MAX_TRIES) {
 			// Mando al client un segnale di attesa
 			sprintf(response, "%d", WAIT);
@@ -476,6 +481,7 @@ void* serveProvider(void *args) {
 			printf("server %d (thread %lu): Provo di nuovo (Tentativo: %d).\n", 
 				processID, threadID, tries);
 			result = (int *)putBloccante(provider->buffer, news);
+			printf("received message: %d\n", result);
 			delay *= 2;		// Aspetta 1s, poi 2s, poi 4s, poi 8s etc.
 		}
 
@@ -566,37 +572,47 @@ void* serveReaders(void *args) {
 	server_t *server = (server_t *)args;
 	
 	while(1) {
-		// Get a news
-		news_t *news = (news_t *)malloc(sizeof(news_t));
-		int *result = (int *)getBloccanteB(server->news, (void *)&news);
-		while (result==WAIT_MSG) {
-			result = (int *)getBloccanteB(server->news, (void *)&news);
-		}			
+		// CHECK - Se ci sono reader attivi procedi (bisogna farlo?)
+		// Perchè così i reader ricevono anche i messaggi precedenti
+		// alla connessione e questo viola la specifica...
+		//int empty = 0;
+		//sem_wait(server->sem_readers);
+		//	empty = (count(server->readers)==0);
+		//sem_post(server->sem_readers);
+		
+		// Estrai una notizia
+		//if (!empty) {
+			// CHECK - Così se non ci sono readrs collegati "butto" la notizia...
+			news_t *news = (news_t *)malloc(sizeof(news_t));
+			int *result = (int *)getBloccanteB(server->news, (void *)&news);
+			while (result==BUFFER_WAIT) {
+				result = (int *)getBloccanteB(server->news, (void *)&news);
+			}			
+			
 
-		// Send the news
-		//printf("test 1\n");
-		sem_wait(server->sem_readers);
-		//pthread_mutex_lock(server->readers_mutex);
-			//printf("test 2\n");
-			iterator_t *i = createIterator(server->readers);
-			while (hasNext(i) ) {
-				reader_id_t *reader = (reader_id_t *)next(i);
-				if (reader->active) {
-					if (!strcmp(reader->topic, news->topic)) {
-						printf("server %d (thread %lu): Mando la notizia al reader (%s).\n", 
-										processID, threadID, reader->name);
-						char* message = news2Message(news);			
-						if (sendString(reader->socket, message)<0) {
-							error = 1;
-							break;
+			// Manda la notizia ai reader registrati e attivi
+			sem_wait(server->sem_readers);
+			//pthread_mutex_lock(server->readers_mutex);
+				iterator_t *i = createIterator(server->readers);
+				while (hasNext(i) ) {
+					reader_id_t *reader = (reader_id_t *)next(i);
+					if (reader->active) {
+						if (!strcmp(reader->topic, news->topic)) {
+							printf("server %d (thread %lu): Mando la notizia al reader (%s).\n", 
+											processID, threadID, reader->name);
+							char* message = news2Message(news);			
+							if (sendString(reader->socket, message)<0) {
+								error = 1;
+								break;
+							}
+							free(message);
 						}
-						free(message);
 					}
 				}
-			}
-			freeIterator(i);
-		//pthread_mutex_unlock(server->readers_mutex);
-		sem_post(server->sem_readers);
+				freeIterator(i);
+			//pthread_mutex_unlock(server->readers_mutex);
+			sem_post(server->sem_readers);
+		//}
 		
 		sleep(1);
 	}

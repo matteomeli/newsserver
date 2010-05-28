@@ -15,7 +15,7 @@
 #include <stdio.h>
 
 // Definitions
-#define WAIT_MSG			(void *) -4
+#define BUFFER_WAIT		(void *) -4
 #define POISON_PILL 	(void *) -3
 #define BUFFER_PIENO 	(void *) -2
 #define BUFFER_VUOTO 	(void *) -1

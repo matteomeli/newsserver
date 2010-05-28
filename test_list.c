@@ -5,6 +5,9 @@
  *  Copyright (c) 2010 Mattematica. All rights reserved.
  */
 
+#include <stdio.h>
+#include "list.h"
+
 int main() {
 	list_t *list = NULL;
 	list = allocList();
@@ -12,6 +15,8 @@ int main() {
 	addElement(list, (void *)1);
 	addElement(list, (void *)2);
 	addElement(list, (void *)3);
+	
+	printf("list count: %d\n", count(list));
 	
 	list_t *iterator = list->next;
 	printf("lista:\n");
