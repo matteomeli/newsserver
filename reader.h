@@ -32,7 +32,7 @@ typedef struct reader_t {
 	char *name;
 	char *topic;
 	int socket;
-	//int running;
+	int running;
 	list_t *received;
 } reader_t;
 

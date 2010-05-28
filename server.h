@@ -67,6 +67,8 @@ int isRegistered(list_t *providers, char *new_provider_id);
 // Thread function to serve one provider
 void* serveProvider(void *args);
 
+void* serveReader(void *args);
+
 // Thread function to serve the readers
 void* serveReaders(void *args);
 

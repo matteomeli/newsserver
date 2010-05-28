@@ -34,7 +34,7 @@ reader_t* initReader(int argc, const char *argv[]) {
 	reader->received = allocList();
 	reader->id = 0;
 	reader->socket = 0;
-	//reader->running = 1;
+	reader->running = 1;
 	
 	return reader;
 }
@@ -131,11 +131,11 @@ int getNews(reader_t *reader) {
 	printf("client: Formato notizie -> [id:provider~message].\n");
 	
 	// Start a thread to get input commands
-	// pthread_t input_getter;
-	// void *status;
-	// pthread_create(&input_getter, NULL, &getInput, reader);
+	pthread_t input_getter;
+	void *status;
+	pthread_create(&input_getter, NULL, &getInput, reader);
 	
-	while (1) {
+	while (reader->running) {
 		// Ricevi prossima notizia
 		if (receiveString(reader->socket, incoming, sizeof(incoming))<=0){
 			printf("client: Errore (%s) durante la read().\n", strerror(errno));
@@ -155,42 +155,40 @@ int getNews(reader_t *reader) {
 	//pthread_join(input_getter, status);
 	printf("client: esco...\n");
 	
-	//if (status != SUCCESS)
-	//	return 0;
+	if (status!=SUCCESS)
+		return 0;
 		
 	return 1;
 }
 
-// void* getInput(void *args) {
-// 	int error = 0;
-// 	
-// 	// Ottieni il riferimento al client reader
-// 	reader_t *reader = (reader_t *)args;
-// 	
-// 	char input;
-// 	while ((input = getchar()) == '\n')
-// 		;
-// 	
-// 	if (input!='q') {
-// 		printf("client: Input non valido. Premi 'q' e invio per chiudere.\n");
-// 		scanf("%s", input);
-// 	}
-// 	reader->running = 0;
-// 	
-// 	// Send a quit message
-// 	if (sendString(reader->socket, "QUIT")<0) {
-// 		printf("client: Errore (%s) durante la write().\n", strerror(errno));
-// 		error = 1;
-// 	}
-// 	printf("client: Chiudo la connessione.\n");
-// 	
-// 	destroyReader(reader);
-// 	
-// 	if (error)
-// 		exit(EXIT_FAILURE);
-// 	else
-// 		exit(EXIT_SUCCESS);
-// }
+void* getInput(void *args) {
+	int error = 0;
+	
+	// Ottieni il riferimento al client reader
+	reader_t *reader = (reader_t *)args;
+	
+	char input;
+	while ((input = getchar()) == '\n')
+		;
+	
+	if (input!='q') {
+		printf("client: Input non valido. Premi 'q' e invio per chiudere.\n");
+		scanf("%s", input);
+	}
+	reader->running = 0;
+	
+	// Send a quit message
+	if (sendString(reader->socket, "QUIT")<0) {
+		printf("client: Errore (%s) durante la write().\n", strerror(errno));
+		error = 1;
+	}
+	printf("client: Chiudo la connessione.\n");
+	
+	if (error)
+		exit(EXIT_FAILURE);
+	else
+		exit(EXIT_SUCCESS);
+}
 
 int runReader(reader_t *reader) {
 	if (!connectToServer(reader))
@@ -203,6 +201,7 @@ int runReader(reader_t *reader) {
 }
 
 void destroyReader(reader_t *reader) {
+	close(reader->socket);
 	free(reader->name);
 	free(reader->topic);
 	freeList(reader->received);
