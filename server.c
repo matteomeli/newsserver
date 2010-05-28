@@ -18,7 +18,13 @@ int main (int argc, const char *argv[]) {
 	// Dealloca il server
 	destroyServer(server);
 	
-	result?exit(EXIT_FAILURE):exit(EXIT_SUCCESS);
+	if(result) {
+		printf("L'esecuzione ha avuto successo.\n");
+		exit(EXIT_SUCCESS);
+	 } else {
+		printf("Riscontrati errori d'esecuzione.\n");
+		exit(EXIT_FAILURE);
+	}
 }
 
 server_t* initServer(int argc, const char *argv[]) {
@@ -38,10 +44,10 @@ server_t* initServer(int argc, const char *argv[]) {
 	server->providers = allocList();
 	// TODO - Fix semaphore problem
 	// Using mutex, works everywhere
-	// server->readers_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-	// pthread_mutex_init(server->readers_mutex, NULL);
-	// server->providers_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-	// pthread_mutex_init(server->providers_mutex, NULL);
+	//server->readers_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+	//pthread_mutex_init(server->readers_mutex, NULL);
+	//server->providers_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+	//pthread_mutex_init(server->providers_mutex, NULL);
 	// Using unnamed semaphores (unnamed semaphores not implemented on Mac OS)
 	//server->sem_readers = (sem_t *)malloc(sizeof(sem_t));
 	//server->sem_providers = (sem_t *)malloc(sizeof(sem_t));
@@ -167,8 +173,28 @@ int runServer(server_t *server) {
 	
 	int i;
 	for (i=0; i<5; i++) {
-		if (status[i] != SUCCESS)
+		if (status[i] != SUCCESS) {
+			switch (i) {
+				case 0:
+					printf("Errore nell'accettazione provider...\n");
+					break;
+				case 1:
+					printf("Errore nell'accettazione reader...\n");
+					break;
+				case 2:
+					printf("Errore nello smistamento notizie...\n");
+					break;
+				case 3:
+					printf("Errore nella pulizia provider...\n");
+					break;
+				case 4:
+					printf("Errore nella pulizia reader...\n");
+					break;
+				default:
+					break;			
+			}
 			return 0;
+		}
 	}
 	
 	return 1;
@@ -225,7 +251,9 @@ void* acceptProviders(void *args) {
 		// 1) Verifica presenza
 		strcpy(id, incoming);
 		sem_wait(server->sem_providers);
+		//pthread_mutex_lock(server->providers_mutex);
 			int present = isRegistered(server->providers, id);
+		//pthread_mutex_unlock(server->providers_mutex);
 		sem_post(server->sem_providers);
 						
 		if (present) {
@@ -237,7 +265,7 @@ void* acceptProviders(void *args) {
 				break;
 			}			
 			printf("server %d (thread %lu): ID già presente, registrazione rifiutata!\n", 
-							processID, threadID, incoming);
+							processID, threadID);
 			close(sockmsg);
 		} else {
 			// Manda l'id della nuova connessione
@@ -274,9 +302,11 @@ void* acceptProviders(void *args) {
 				makeProviderID(server->news, worker, id, topic, serialids, sockmsg);
 			
 			sem_wait(server->sem_providers);
+			//pthread_mutex_lock(server->providers_mutex);
 				addElement(server->providers, provider);
 				printf("server %d (thread %lu): providers -> ", processID, threadID);
 				showConnectedProviders(server->providers);
+			//pthread_mutex_unlock(server->providers_mutex);
 			sem_post(server->sem_providers);
 			
 			// Avvia un nuovo thread per servire il provider
@@ -365,11 +395,11 @@ void* acceptReaders(void *args) {
 		pthread_t worker;			
 		reader_id_t *reader = makeReaderID(worker, id, topic, ++serialids, sockmsg);
 		sem_wait(server->sem_readers);
-			//pthread_mutex_lock(server->readers_mutex);
+		//pthread_mutex_lock(server->readers_mutex);
 			addElement(server->readers, reader);
 			printf("server %d (thread %lu): readers -> ", processID, threadID);
 			showConnectedReaders(server->readers);
-			//pthread_mutex_unlock(server->readers_mutex);
+		//pthread_mutex_unlock(server->readers_mutex);
 		sem_post(server->sem_readers);
 
 		// TODO - Avvia un thread di ascolto del reader (per gestire disconnessioni...)
@@ -473,7 +503,7 @@ void* serveProvider(void *args) {
 		}
 	}
 
-	close(provider->socket);
+	//close(provider->socket);
 	provider->active = 0;
 	// TODO - Remove provider from list
 	printf("server %d (thread %lu): Chiudo la connessione con \"%s\".\n", 
@@ -506,7 +536,10 @@ void* serveReaders(void *args) {
 		}			
 
 		// Send the news
+		//printf("test 1\n");
 		sem_wait(server->sem_readers);
+		//pthread_mutex_lock(server->readers_mutex);
+			//printf("test 2\n");
 			iterator_t *i = createIterator(server->readers);
 			while (hasNext(i) ) {
 				reader_id_t *reader = (reader_id_t *)next(i);
@@ -524,6 +557,7 @@ void* serveReaders(void *args) {
 				}
 			}
 			freeIterator(i);
+		//pthread_mutex_unlock(server->readers_mutex);
 		sem_post(server->sem_readers);
 		
 		sleep(1);
@@ -549,6 +583,7 @@ void* cleanProviders(void *args) {
 		list_t *matches = allocList();
 		
 		sem_wait(server->sem_providers);
+		//pthread_mutex_lock(server->providers_mutex);
 			// Cerca provider non attivi
 			iterator_t *i = createIterator(server->providers);
 			while (hasNext(i)) {
@@ -563,10 +598,16 @@ void* cleanProviders(void *args) {
 			iterator_t *j = createIterator(matches);
 			while (hasNext(j)) {
 				if (!cancel) cancel = 1 - cancel;
+				
+				void *status;
 				provider_id_t *match = (provider_id_t *)next(i);
 				printf("server %d (thread %lu): Rilascio provider \"%s\"...\n", 
 								processID, threadID, match->name);
 				removeElement(server->providers, match);
+				
+				pthread_join(match->worker, status);
+				if (status!=SUCCESS)
+					error = 1;
 				
 				destroyProviderID(match);
 			}
@@ -575,9 +616,11 @@ void* cleanProviders(void *args) {
 				printf("server %d (thread %lu): providers -> ", processID, threadID);
 				showConnectedProviders(server->providers);
 			}
+		//pthread_mutex_unlock(server->providers_mutex);
 		sem_post(server->sem_providers);
 
 		// Esegui pulizia ogni 10s
+		freeList(matches);
 		sleep(10);
 	}
 	
@@ -601,6 +644,7 @@ void* cleanReaders(void *args) {
 		list_t *matches = allocList();
 		
 		sem_wait(server->sem_readers);
+		//pthread_mutex_lock(server->readers_mutex);
 			// Cerca provider non attivi
 			iterator_t *i = createIterator(server->readers);
 			while (hasNext(i)) {
@@ -615,10 +659,17 @@ void* cleanReaders(void *args) {
 			iterator_t *j = createIterator(matches);
 			while (hasNext(j)) {
 				if (!cancel) cancel = 1 - cancel;
+				
+				void *status;
 				reader_id_t *match = (reader_id_t *)next(i);
 				printf("server %d (thread %lu): Rilascio provider \"%s\"...\n", 
 								processID, threadID, match->name);
 				removeElement(server->readers, match);
+				
+				pthread_join(match->worker, status);
+				if (status!=SUCCESS)
+					error = 1;
+				
 				destroyReaderID(match);
 			}
 			
@@ -626,7 +677,12 @@ void* cleanReaders(void *args) {
 				printf("server %d (thread %lu): readers -> ", processID, threadID);
 				showConnectedProviders(server->readers);
 			}
+		//pthread_mutex_unlock(server->readers_mutex);
 		sem_post(server->sem_readers);
+		
+		// Esegui ogni 10s
+		freeList(matches);	
+		sleep(10);
 	}
 	
 	if (error)
