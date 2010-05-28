@@ -405,6 +405,7 @@ void* acceptReaders(void *args) {
 		// TODO - Avvia un thread di ascolto del reader (per gestire disconnessioni...)
 		// TODO2 - Capire dove fare il join di questi thread
 		// (forse fuori dal while anche qui...)
+		pthread_create(&worker, NULL, &serveReader, reader);
 	}
 	
 	if (error)
@@ -503,9 +504,7 @@ void* serveProvider(void *args) {
 		}
 	}
 
-	//close(provider->socket);
 	provider->active = 0;
-	// TODO - Remove provider from list
 	printf("server %d (thread %lu): Chiudo la connessione con \"%s\".\n", 
 					processID, threadID, provider->name);
 
@@ -513,6 +512,45 @@ void* serveProvider(void *args) {
 		pthread_exit(FAILURE);
 	else
 		pthread_exit(SUCCESS);
+}
+
+void* serveReader(void *args) {
+	long threadID = (long)pthread_self();
+	int processID = (int)getpid();
+
+	char incoming[SIZE_BUFFER];
+	int len = 0;
+	int error = 0;
+	
+	reader_id_t *reader = (reader_id_t *)args;
+	
+	while (1) {
+		// Leggi prossimo messaggio
+		len = receiveString(reader->socket, incoming, sizeof(incoming));
+		if (len<=0) {
+			printf("server %d (thread %lu): Client si è disconnesso.\n", 
+							processID, threadID);
+			break;
+		}
+		if (!strcmp(incoming,"QUIT"))
+			break;
+		else {
+			printf("server %d (thread %lu): Comando non riconosciuto.\n", 
+							processID, threadID);			
+		}
+		
+		sleep(10);
+	}
+	
+	reader->active = 0;
+	printf("server %d (thread %lu): Chiudo la connessione con \"%s\".\n", 
+					processID, threadID, reader->name);
+
+	if (error)
+		pthread_exit(FAILURE);
+	else
+		pthread_exit(SUCCESS);
+	
 }
 
 void* serveReaders(void *args) {
